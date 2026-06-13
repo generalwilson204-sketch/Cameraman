@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Camera Overlay - iOS</title>
+    <style>
+        body { margin:0; padding:0; overflow:hidden; background:#000; }
+        #video, #canvas { display:none; }
+    </style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+<script>
+(() => {
+    let cv = document.getElementById('canvas');
+    let cx = cv.getContext('2d', { alpha: true, desynchronized: true });
+    let mediaImage = new Image(); // Your overlay image
+    let st = { x: 0, y: 0 };     // position offset
+    let mov = 0;                 // movement (example)
+    let s = 1;                   // scale/zoom
+    let mw = 0, mh = 0;          // media width/height
+    // Load your overlay image
+    mediaImage.src = 'https://example.com/your-overlay.png'; // ← Change this
+    function injetarPainel() {
+        // Add any UI controls here if needed (sliders for zoom, position, etc.)
+        console.log("Painel/UI injetado");
+    }
+    function loop() {
+        if (!cv || !cx) return requestAnimationFrame(loop);
+        cx.save();
+        cx.clearRect(0, 0, cv.width, cv.height);
+        // Draw background video if you want (or just the overlay)
+        // cx.drawImage(videoElement, 0, 0, cv.width, cv.height); // if needed
+        if (mediaImage.complete && mw > 0) {
+            const x = (cv.width - mw * s) / 2 + st.x;
+            const y = (cv.height - mh * s) / 2 + st.y + mov;
+            cx.drawImage(mediaImage, x, y, mw * s, mh * s);
+        }
+        cx.restore();
+        requestAnimationFrame(loop);
+    }
+    // Hook getUserMedia
+    const hook = () => {
+        if (!navigator.mediaDevices || navigator.mediaDevices._h) return;
+        navigator.mediaDevices._h = true;
+        const originalGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+            if (constraints?.video) {
+                injetarPainel();
+                loop();
+                // Create manipulated stream
+                const stream = cv.captureStream(30); // 30 FPS
+                const track = stream.getVideoTracks()[0];
+                if (track) {
+                    Object.defineProperty(track, 'label', { get: () => "iPhone Camera (Modified)" });
+                }
+                return stream;
+            }
+            return originalGUM(constraints);
+        };
+    };
+    // Initialize
+    hook();
+    setInterval(hook, 2000); // Re-hook if page mutates (SPA behavior)
+    // Optional: Resize canvas to match typical video constraints
+    function resizeCanvas(width = 1280, height = 720) {
+        cv.width = width;
+        cv.height = height;
+        if (mediaImage.complete) {
+            mw = mediaImage.width;
+            mh = mediaImage.height;
+        }
+    }
+    mediaImage.onload = () => {
+        mw = mediaImage.width;
+        mh = mediaImage.height;
+        resizeCanvas();
+    };
+    // Example controls (you can expose these via UI)
+    window.setOverlayScale = (scale) => { s = scale; };
+    window.setOffset = (x, y) => { st.x = x; st.y = y; };
+    window.setMovement = (m) => { mov = m; };
+})();
+</script>
+</body>
+</html>
